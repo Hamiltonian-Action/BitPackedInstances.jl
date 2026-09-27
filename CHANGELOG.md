@@ -19,7 +19,7 @@ The format of this file is based on [Keep a Changelog](https://keepachangelog.co
 - Optimise retrieval for the final encoded (non-singleton) type.
 - Optimise on-site function inlining.
 
-# Fixed
+### Fixed
 - Rectify non-compliant function signatures for querying `eltype`, `keytype`, and `valtype`.
 - Rectify incorrectly typed output for `AbstractPackedInstances` (reverse) iteration.
 - Rectify encoding issue for signed arithmetic progressions.
