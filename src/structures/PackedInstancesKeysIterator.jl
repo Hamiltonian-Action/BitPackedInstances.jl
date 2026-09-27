@@ -3,21 +3,22 @@
 
 """
 
-`PackedInstancesKeysIterator(::PackedInstances)`
+	PackedInstancesKeysIterator
 
-Iterator over the keys of the provided [`PackedInstances`](@ref) argument.
+Iterator over the keys of the associated [`AbstractPackedInstances`](@ref).
 
 !!! warning
 	It is advised that one ought to avoid utilising this type directly, in lieu
-	consider employing the 'keys' invocation.
+	consider employing the `keys` invocation.
 
-See also:	[`PackedInstancesValuesIterator`](@ref)
+See also:
+	[`PackedInstancesValuesIterator`](@ref)
 
 """
 struct PackedInstancesKeysIterator{T <: Tuple}
 
 	@inline function PackedInstancesKeysIterator(
-		::PackedInstances{U, T}
+		source::AbstractPackedInstances{U, T}
 		) where {U <: Unsigned, T <: Tuple}
 
 		return new{T}()
@@ -31,6 +32,32 @@ struct PackedInstancesKeysIterator{T <: Tuple}
 		return new{T}()
 
 	end
+
+end
+
+#===============================================================================
+INTERNAL
+===============================================================================#
+
+@inline function query_content_mutability(
+	::Union{
+		PackedInstancesKeysIterator,
+		Type{<: PackedInstancesKeysIterator}
+		}
+	)
+
+	return false
+
+end
+
+@inline function query_name(
+	::Union{
+		PackedInstancesKeysIterator,
+		Type{<: PackedInstancesKeysIterator}
+		}
+	)
+
+	return "PackedInstancesKeysIterator"
 
 end
 

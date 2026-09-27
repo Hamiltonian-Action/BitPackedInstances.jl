@@ -8,6 +8,9 @@ CONFIGURATION
 # Sufficiently thorough sampling.
 const round_count = 0x40
 
+# Sufficiently large as to encompass everything, sans generated enumerations.
+const unsigned_type = UInt64
+
 #===============================================================================
 ENUMERATIONS
 ===============================================================================#
@@ -19,15 +22,26 @@ ENUMERATIONS
 @enum EnumD::UInt16 begin d_1; d_2; d_3; d_4; d_5; end
 @enum EnumE::Int32 begin e_1; e_2; e_3; e_4; e_5; e_6; end
 @enum EnumF::UInt32 begin f_1; f_2; f_3; f_4; f_5; f_6; f_7; end
-@enum EnumG::Int64 begin g_1; g_2; g_3; g_4; g_5; g_6; g_7; g_8; end
 
-# Unordered, not an arithmetic progression.
-@enum Primes::UInt64 begin
+# Unordered, not an arithmetic progression, or both.
+@enum Primes::Int64 begin
 	seven = 7;
 	three = 3;
 	two = 2;
 	five = 5;
 	eleven = 11;
+end
+@enum Squares::UInt64 begin
+	four = 4
+	nine = 9
+	sixteen = 16
+	twenty_five = 25
+	thirty_six = 36
+end
+@enum Bases::UInt128 begin
+	binary = 2
+	ternary = 3
+	unary = 1
 end
 
 # Consumes no bits to encode.
@@ -66,18 +80,12 @@ let
 			stride = rand(value_type)
 		end
 
+		instances = Expr[]
+		sizehint!(instances, maximum_instances)
 		counter = zero(maximum_instances)
 		current = rand(value_type)
-		instances = [
-			Expr(
-				:(=),
-				Symbol("enum_", enum_counter, "_", counter),
-				current
-				)
-			]
-		next = current + stride
-		counter += one(counter)
-		while next > current && counter < maximum_instances
+		next = current
+		while current <= next && counter < maximum_instances
 			push!(
 				instances,
 				Expr(
@@ -150,25 +158,64 @@ using Test: @testset, @test, @test_throws
 CONVENIENCE
 ===============================================================================#
 
-const benevolent_types = [
-	EnumA, EnumB, EnumC, EnumD, EnumE, EnumF, EnumG, Primes,
+@inline function within_capacity(
+	::Type{U}, X::Type
+	) where {U <: Unsigned}
+
+	return encoding_bits(X) <= BitPackedInstances.bit_count(U)
+
+end
+
+@inline function capacity_filter(
+	::Type{U}, content_types::Base.AbstractVecOrTuple
+	) where {U <: Unsigned}
+
+	capacity = BitPackedInstances.bit_count(U)
+	consumed = accumulate(
+		+, (encoding_bits(x) for x in content_types); init = zero(U)
+		)
+	@inbounds return content_types[findall(<=(capacity), consumed)]
+
+end
+
+@inline function unique_instances(
+	X::Type
+	)
+
+	return BitPackedInstances.unique_instances(X)
+
+end
+
+const BitPackedInstancesTypes = Union{
+	AbstractPackedInstances,
+	BitPackedInstances.PackedInstancesKeysIterator,
+	BitPackedInstances.PackedInstancesValuesIterator
+	}
+
+const AbstractPackedInstances_types = (
+	MutablePackedInstances, ImmutablePackedInstances
+	)
+
+const benevolent_types = (
+	EnumA, EnumB, EnumC, EnumD, EnumE, EnumF,
+	Primes, Squares, Bases, CustomInstances,
 	SingletonA, SingletonB, SingletonC, SingletonD,
-	Hippopotomonstrosesquippedaliophobia, ShortKey, CustomInstances
-	]
+	Hippopotomonstrosesquippedaliophobia, ShortKey
+	)
 
-const malevolent_types = [
-	Nothing, Bool, Type, Symbol
-	]
+const malevolent_types = (
+	Nothing, Bool, Expr, Symbol
+	)
 
-const generated_enums = [
-	eval(Symbol("Enum_", x)) for x in Base.OneTo(round_count)
-	]
+const generated_enums = tuple(
+	(eval(Symbol("Enum_", x)) for x in Base.OneTo(round_count))...
+	)
 
 #===============================================================================
 SETS
 ===============================================================================#
 
-include("sets/randomised.jl")
+include("sets/interface.jl")
 include("sets/progression.jl")
 include("sets/show.jl")
 

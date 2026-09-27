@@ -11,15 +11,15 @@ BitPackedInstances is lightweight package that facilitates the bit packing of an
 
 # WARNINGS
 
-- This package was developed with the primary objective of reducing the register pressure required to handle `@enum` parameters controlling tunable functionality. As such, the intended use case favours encoding statically known types rather than being a general purposes data structure.
+- This package was developed with the primary objective of reducing the register pressure required to handle `@enum` parameters controlling tunable functionality. As such, the intended use case favours encoding statically known types rather than being a general purpose data structure.
 
-- Due to thoroughly employing a large swathe of `@generated` function invocations, world age restrictions are of particular importance. To wit, any content which one wishes to have `PackedInstances` encode must be completely defined before `BitPackedInstances.jl` is imported into the parent scope.
+- Due to thoroughly employing a large swathe of `@generated` function invocations, world age restrictions are of particular importance. To wit, any content which one wishes to encode must be completely defined before `BitPackedInstances.jl` is imported into the parent scope.
 
 # Performance considerations
 
-This section concerns data types that can be freely interconverted to and form an integral representation.
+This section concerns data types that can be freely iterchanged to and form an integer representation.
 
-- Optimal encoding and retrieval is realised when querying the instances returns (upon conversion to a common unsigned type and subtracting the value of the first entry) an iterable constituting an increasingly ordered arithmetic progression.
+- Optimal encoding and retrieval is realised when querying the instances returns (upon transforming to a common integer type, reinterpreting as an unsigned value, and subtracting the first entry) an iterable constituting an increasingly ordered arithmetic progression.
 
 - Whilst there are other progressions that could be handled just as efficiently, this project shall make no effort to account for all of them given that this is the default `@enum` behaviour. Concerned individuals and/or projects are encouraged to employ suitable translation layers as they see fit.
 
@@ -34,36 +34,42 @@ This section concerns data types that can be freely interconverted to and form a
 using BitPackedInstances
 
 # Construct by passing an unsigned type and any number of values.
-bit_pack = PackedInstances(UInt, snowy)
+bit_pack = MutablePackedInstances(UInt64, sunny)
 # Preferred content matching style.
-@assert match_value(bit_pack, snowy)
+@assert match_content(bit_pack, sunny)
 # Regular retrieval is also possible in two distinct styles.
 @assert bit_pack.Weather == bit_pack[Weather]
 # Alter the underlying type.
-bit_pack = PackedInstances(UInt8, bit_pack)
+bit_pack = AbstractPackedInstances(UInt8, bit_pack)
 @assert encoding_type(bit_pack) == UInt8
-# Overwrite existing fields
+# Overwrite existing content.
 bit_pack.Weather = rainy
-@assert match_value(bit_pack, rainy)
+@assert match_content(bit_pack, rainy)
+bit_pack[Weather] = snowy
+@assert match_content(bit_pack, snowy)
+# Preferred modification style.
+overwrite!(bit_pack, windy)
+@assert match_content(bit_pack, windy)
 # Extend with new content.
-bit_pack = PackedInstances(bit_pack, summer)
-@assert match_value(bit_pack, summer)
+bit_pack = AbstractPackedInstances(bit_pack, summer)
+@assert match_content(bit_pack, summer)
 # Both at once if so desired.
-bit_pack = PackedInstances(bit_pack, sunny, optimistic)
-@assert match_value(bit_pack, summer)
-@assert match_value(bit_pack, sunny)
-@assert match_value(bit_pack, optimistic)
+bit_pack = AbstractPackedInstances(bit_pack, sunny, optimistic)
+@assert match_content(bit_pack, summer, sunny, optimistic)
 # Eliminate what is no longer needed.
 bit_pack = discard(bit_pack, Mood)
 @assert !haskey(bit_pack, Mood)
-# Wrap it up and pass it through to JuliaGPU kernels.
-@assert bit_pack == unwrap(wrap(bit_pack))
+# Convert to/from mutable and immutable forms if so desired.
+bit_pack = ImmutablePackedInstances(bit_pack)
+@assert !ismutable(bit_pack)
+bit_pack = MutablePackedInstances(bit_pack)
+@assert ismutable(bit_pack)
 
-# World age forbids certain possibilities.
+# World age restrictions forbid certain possibilities.
 @enum Catastrophy begin impossible; end
 # Failure awaits whoever attempts.
 try
-	PackedInstances(UInt, impossible)
+	ImmutablePackedInstances(UInt64, impossible)
 	@assert false
 catch error
 	@assert error isa MethodError

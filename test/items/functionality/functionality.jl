@@ -11,16 +11,25 @@
 
 	include("preamble.jl")
 
-	@testset "Randomised" begin
-		test_randomised(round_count, benevolent_types, malevolent_types)
+	@testset "Interface" begin
+		test_interface(
+			unsigned_type, round_count,
+			AbstractPackedInstances_types,
+			benevolent_types, malevolent_types
+			)
 	end
 
 	@testset "Progression" begin
-		test_progression(generated_enums)
+		test_progression(
+			unsigned_type, AbstractPackedInstances_types, generated_enums
+			)
 	end
 
 	@testset "Show" begin
-		test_show(round_count, benevolent_types)
+		test_show(
+			unsigned_type, round_count,
+			AbstractPackedInstances_types, benevolent_types
+			)
 	end
 
 end

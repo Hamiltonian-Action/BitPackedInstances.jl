@@ -2,25 +2,34 @@
 #==============================================================================#
 
 function test_progression(
-	types_to_test::Base.AbstractVecOrTuple
-	)
+	::Type{U},
+	constructors::Base.AbstractVecOrTuple{Base.Callable},
+	types_to_test::Base.AbstractVecOrTuple{DataType}
+	) where {U <: Unsigned}
+
+	# Only retain what may ever possibly be encoded.
+	types_to_test = filter(Base.Fix{1}(within_capacity, U), types_to_test)
+	isempty(types_to_test) && throw(
+		ArgumentError("Invalid test suite initialisation.")
+		)
 
 	for target_type in types_to_test
 
-		content = instances(target_type)
+		# Random supported constructor.
+		constructor = rand(constructors)
+		content = unique_instances(target_type)
 		count = length(content)
 		# Unlike indices, these start from zero.
 		bit_patterns = zero(count) : (count - one(count))
 
 		@test begin
-			output = all(
-				x -> match_value(PackedInstances(UInt, x), x),
+			all(
+				x -> match_content(constructor(U, x), x),
 				content
-				)
-			output &= all(
-				x -> PackedInstances(UInt, first(x)).bits == last(x),
-				zip(content, bit_patterns)
-				)
+				) && all(
+					x -> constructor(U, first(x)).bits == last(x),
+					zip(content, bit_patterns)
+					)
 		end
 
 	end
