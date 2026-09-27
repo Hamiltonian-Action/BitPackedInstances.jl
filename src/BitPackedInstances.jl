@@ -11,7 +11,7 @@ efficient `@generated` implementations.
 module BitPackedInstances
 
 include("utilities.jl")
-include("errors.jl")
+include("diagnostics.jl")
 include("structures.jl")
 include("interface.jl")
 include("output.jl")

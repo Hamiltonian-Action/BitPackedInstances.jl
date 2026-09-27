@@ -5,68 +5,58 @@
 COPY
 ===============================================================================#
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.copy(
-	input::Union{
+	source::Union{
 		PackedInstancesKeysIterator,
 		Iterators.Reverse{<: PackedInstancesKeysIterator}
 		}
 	)
 
-	if input isa Iterators.Reverse
+	if source isa Iterators.Reverse
 		direction = Iterators.reverse
-		keys_iterator = input.itr
+		keys_iterator = source.itr
 	else
 		direction = identity
-		keys_iterator = input
+		keys_iterator = source
 	end
 	return direction(PackedInstancesKeysIterator(keys_iterator))
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.copy(
-	input::Union{
+	source::Union{
 		PackedInstancesValuesIterator,
 		Iterators.Reverse{<: PackedInstancesValuesIterator}
 		}
 	)
 
-	if input isa Iterators.Reverse
+	if source isa Iterators.Reverse
 		direction = Iterators.reverse
-		values_iterator = input.itr
+		values_iterator = source.itr
 	else
 		direction = identity
-		values_iterator = input
+		values_iterator = source
 	end
 	return direction(PackedInstancesValuesIterator(values_iterator))
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.copy(
-	input::Union{
-		PackedInstances,
-		Iterators.Reverse{<: PackedInstances}
+	source::Union{
+		AbstractPackedInstances,
+		Iterators.Reverse{<: AbstractPackedInstances}
 		}
 	)
 
-	if input isa Iterators.Reverse
+	if source isa Iterators.Reverse
 		direction = Iterators.reverse
-		bit_pack = input.itr
+		bit_pack = source.itr
 	else
 		direction = identity
-		bit_pack = input
+		bit_pack = source
 	end
-	return direction(PackedInstances(bit_pack))
-
-end
-
-@inline function Base.copy(
-	bit_pack_container::PackedInstancesContainer
-	)
-
-	return PackedInstancesContainer(bit_pack_container)
+	constructor = query_constructor(bit_pack)
+	return direction(constructor(bit_pack))
 
 end
 
@@ -91,7 +81,7 @@ end
 end
 
 @inline function Base.length(
-	::PackedInstances{U, T}
+	::AbstractPackedInstances{U, T}
 	) where {U <: Unsigned, T <: Tuple}
 
 	return length(fieldtypes(T))
@@ -111,19 +101,20 @@ ELTYPE
 end
 
 @inline function Base.eltype(
-	::Type{PackedInstancesValuesIterator{U, T}}
+	::Type{<: PackedInstancesValuesIterator{U, T}}
 	) where {U <: Unsigned, T <: Tuple}
 
-	return eltype(map(x -> first(instances(x)), fieldtypes(T)))
+	return eltype(map(ComposedFunction(first, instances), fieldtypes(T)))
 
 end
 
 @inline function Base.eltype(
-	::Type{PackedInstances{U, T}}
+	::Type{<: AbstractPackedInstances{U, T}}
 	) where {U <: Unsigned, T <: Tuple}
 
 	return Pair{
-		keytype(PackedInstances{U, T}), valtype(PackedInstances{U, T})
+		keytype(AbstractPackedInstances{U, T}),
+		valtype(AbstractPackedInstances{U, T})
 		}
 
 end
@@ -142,7 +133,6 @@ EQUALITY
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.:(==)(
 	left::Iterators.Reverse{<: PackedInstancesKeysIterator},
 	right::Iterators.Reverse{<: PackedInstancesKeysIterator}
@@ -163,7 +153,6 @@ end
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.:(==)(
 	left::Iterators.Reverse{<: PackedInstancesValuesIterator},
 	right::Iterators.Reverse{<: PackedInstancesValuesIterator}
@@ -175,30 +164,38 @@ end
 end
 
 @inline function Base.:(==)(
-	left::PackedInstances,
-	right::PackedInstances
-	)
+	left::MutablePackedInstances{U},
+	right::MutablePackedInstances{U}
+	) where {U <: Unsigned}
 
 	return values(left) == values(right)
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
 @inline function Base.:(==)(
-	left::Iterators.Reverse{<: PackedInstances},
-	right::Iterators.Reverse{<: PackedInstances}
-	)
+	left::Iterators.Reverse{<: MutablePackedInstances{U}},
+	right::Iterators.Reverse{<: MutablePackedInstances{U}}
+	) where {U <: Unsigned}
 
 	return values(left.itr) == values(right.itr)
 
 end
 
 @inline function Base.:(==)(
-	left::PackedInstancesContainer,
-	right::PackedInstancesContainer
-	)
+	left::ImmutablePackedInstances{U},
+	right::ImmutablePackedInstances{U}
+	) where {U <: Unsigned}
 
-	return PackedInstances(left) == PackedInstances(right)
+	return values(left) == values(right)
+
+end
+
+@inline function Base.:(==)(
+	left::Iterators.Reverse{<: ImmutablePackedInstances{U}},
+	right::Iterators.Reverse{<: ImmutablePackedInstances{U}}
+	) where {U <: Unsigned}
+
+	return values(left.itr) == values(right.itr)
 
 end
 
@@ -206,8 +203,7 @@ end
 HASH
 ===============================================================================#
 
-# CAUTION: Proper syntax for nested parametric typing.
-@inline function Base.hash(
+function Base.hash(
 	input::Union{
 		PackedInstancesKeysIterator,
 		Iterators.Reverse{<: PackedInstancesKeysIterator}
@@ -230,8 +226,7 @@ HASH
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
-@inline function Base.hash(
+function Base.hash(
 	input::Union{
 		PackedInstancesValuesIterator,
 		Iterators.Reverse{<: PackedInstancesValuesIterator}
@@ -254,20 +249,19 @@ end
 
 end
 
-# CAUTION: Proper syntax for nested parametric typing.
-@inline function Base.hash(
+function Base.hash(
 	input::Union{
-		PackedInstances,
-		Iterators.Reverse{<: PackedInstances}
+		MutablePackedInstances{U},
+		Iterators.Reverse{<: MutablePackedInstances{U}}
 		},
 	admixture::UInt
-	)
+	) where {U <: Unsigned}
 
 	if input isa Iterators.Reverse
-		hashed_type = Iterators.Reverse{PackedInstances}
+		hashed_type = Iterators.Reverse{MutablePackedInstances{U}}
 		bit_pack = input.itr
 	else
-		hashed_type = PackedInstances
+		hashed_type = MutablePackedInstances{U}
 		bit_pack = input
 	end
 	output = hash(hashed_type, admixture)
@@ -278,12 +272,23 @@ end
 
 end
 
-@inline function Base.hash(
-	bit_pack_container::PackedInstancesContainer, admixture::UInt
-	)
+function Base.hash(
+	input::Union{
+		ImmutablePackedInstances{U},
+		Iterators.Reverse{<: ImmutablePackedInstances{U}}
+		},
+	admixture::UInt
+	) where {U <: Unsigned}
 
-	output = hash(PackedInstancesContainer, admixture)
-	for (_, value) in PackedInstances(bit_pack_container)
+	if input isa Iterators.Reverse
+		hashed_type = Iterators.Reverse{ImmutablePackedInstances{U}}
+		bit_pack = input.itr
+	else
+		hashed_type = ImmutablePackedInstances{U}
+		bit_pack = input
+	end
+	output = hash(hashed_type, admixture)
+	for (_, value) in bit_pack
 		output = hash(value, output)
 	end
 	return output

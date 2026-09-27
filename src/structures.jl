@@ -1,11 +1,11 @@
 
 #==============================================================================#
 
+include("structures/AbstractPackedInstances.jl")
 include("structures/DataContainer.jl")
-include("structures/PackedInstances.jl")
-include("structures/PackedInstancesContainer.jl")
+include("structures/MutablePackedInstances.jl")
+include("structures/ImmutablePackedInstances.jl")
 include("structures/PackedInstancesKeysIterator.jl")
 include("structures/PackedInstancesValuesIterator.jl")
-include("structures/interconversion.jl")
 
 #==============================================================================#

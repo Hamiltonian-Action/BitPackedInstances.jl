@@ -1,33 +1,26 @@
 
 #==============================================================================#
 
-# CAUTION: Utilising sizeof is prone to error in the presence of metadata.
+# CAUTION: Utilising `sizeof` is prone to error in the presence of metadata.
 @inline function bit_count(
-	::Type{U}
-	) where {U <: Unsigned}
+	::Type{S}
+	) where {S <: Integer}
 
-	return convert(U, count_zeros(zero(U)))
+	return convert(S, count_zeros(zero(S)))
 
 end
 
 # Specifies number of bits necessary to encode this many configurations.
 @inline function required_bits(
-	configuration_count::U
-	) where {U <: Unsigned}
-
-	configuration_count = max(configuration_count, one(U))
-	return bit_count(U) - convert(
-		U, leading_zeros(configuration_count - one(U))
-		)
-
-end
-
-# Quality of life shorthand.
-@inline function required_bits(
 	X::Type
 	)
 
-	return required_bits(convert(Unsigned, length(instances(X))))
+	configuration_count = length(unique_instances(X))
+	S = typeof(configuration_count)
+	configuration_count = max(configuration_count, one(S))
+	return bit_count(S) - convert(
+		S, leading_zeros(configuration_count - one(S))
+		)
 
 end
 
@@ -41,52 +34,39 @@ end
 end
 
 # CAUTION: Required bits must not exceed those available in the provided type.
+# CAUTION: The provided type must not be a singleton.
 @inline @generated function bits_from_value(
-	::Type{U}, value::X, ::Val{shift}
-	) where {U <: Unsigned, X, shift}
+	::Type{U}, value::X, ::Val{shift}, ::Val{progression}
+	) where {U <: Unsigned, X, shift, progression}
 
-	if iszero(required_bits(X))
+	if progression.validity
 		output = quote
-			return zero(U)
+			@inline return to_integer(
+				U, value, Val($progression)
+				) << $shift
 			end
 	else
-		progression = check_arithmetic_progression(X)
-		if progression.validity
-			common_type = progression.common_type
-			# TODO: There has to be a cleaner way to achieve this.
-			unsigned_type = typeof(Unsigned(zero(common_type)))
-			offset = progression.offset
-			stride = progression.stride
-			# No need to worry about rounding due to integral ratio.
-			output = quote
-				return convert(
-					U,
-					div(reinterpret($unsigned_type, value) - $offset, $stride)
-					) << $shift
-				end
-		else
-			# CAUTION: Explicit construction rather than quotation, painful.
-			conditional_tree = :(;;)
-			current_branch = :(;;)
-			for (counter, instance) in enumerate(instances(X))
-				instance_bits = convert(U, counter - one(counter)) << shift
-				clause = Expr(:call, :(==), :value, instance)
-				body = Expr(:(=), :bits, instance_bits)
-				if isone(counter)
-					conditional_tree = Expr(:if, clause, body)
-					current_branch = conditional_tree
-				else
-					new_branch = Expr(:elseif, clause, body)
-					push!(current_branch.args, new_branch)
-					current_branch = new_branch
-				end
+		# CAUTION: Explicit construction rather than quotation, painful.
+		conditional_tree = :(;;)
+		current_branch = :(;;)
+		for (counter, instance) in enumerate(unique_instances(X))
+			instance_bits = convert(U, counter - one(counter)) << shift
+			clause = Expr(:call, :(==), :value, instance)
+			body = Expr(:(=), :bits, instance_bits)
+			if isone(counter)
+				conditional_tree = Expr(:if, clause, body)
+				current_branch = conditional_tree
+			else
+				new_branch = Expr(:elseif, clause, body)
+				push!(current_branch.args, new_branch)
+				current_branch = new_branch
 			end
-
-			output = quote
-				$conditional_tree
-				return bits
-				end
 		end
+
+		output = quote
+			$conditional_tree
+			return bits
+			end
 	end
 
 	return output
@@ -95,41 +75,39 @@ end
 
 # CAUTION: Required bits must not exceed those available in the provided type.
 @inline @generated function value_from_bits(
-	::Type{X}, bits::U, ::Val{shift}, ::Val{skip_mask}
-	) where {X, U <: Unsigned, shift, skip_mask}
+	::Type{X}, bits::U, ::Val{shift}, ::Val{final_active_bits}
+	) where {X, U <: Unsigned, shift, final_active_bits}
 
-	span = required_bits(X)
+	span = convert(U, required_bits(X))
 	if iszero(span)
-		singleton = first(instances(X))
+		singleton = only(unique_instances(X))
 		output = quote
 			return $singleton
 			end
 	else
-		mask = mask_bit_range(U, span, zero(U))
-		#=======================================================================
-		# TODO: Figure out how to enforce this optimisation.
 		mask = ifelse(
-			skip_mask,
+			final_active_bits,
 			~zero(U),
 			mask_bit_range(U, span, zero(U))
 			)
-		=======================================================================#
 
 		progression = check_arithmetic_progression(X)
 		if progression.validity
-			common_type = progression.common_type
-			# TODO: There has to be a cleaner way to achieve this.
-			unsigned_type = typeof(Unsigned(zero(common_type)))
-			offset = progression.offset
-			stride = progression.stride
 			output = quote
-				temp = convert($unsigned_type, (bits >> $shift) & $mask)
-				return X($offset + $stride * reinterpret($common_type, temp))
+				@inline return from_integer(
+					X, bits >> $shift, Val($mask), Val($progression)
+					)
 				end
 		else
+			# Paranoid precaution should the latter type not suffice.
+			unsigned_type = promote_type(U, Csize_t)
+			# Enables optimiser to eliminate extraneous instruction.
+			mask = convert(U, ~zero(unsigned_type) & mask)
 			output = quote
-				index = convert(Csize_t, (bits >> $shift) & $mask)
-				@inbounds return instances(X)[index + one(index)]
+				@inline temp = convert(
+					$unsigned_type, (bits >> $shift) & $mask
+					)
+				@inbounds return unique_instances(X)[temp + one(temp)]
 				end
 		end
 	end

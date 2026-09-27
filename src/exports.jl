@@ -6,15 +6,15 @@ STRUCTURES
 ===============================================================================#
 
 export
-	PackedInstances
+	AbstractPackedInstances, MutablePackedInstances, ImmutablePackedInstances
 
 #===============================================================================
 INTERFACE
 ===============================================================================#
 
 export
-	wrap, unwrap, match_value, discard,
-	is_encodable, can_encode, encoding_bits,
+	overwrite!, discard, match_content,
+	is_encodable, encoding_bits, can_encode,
 	encoding_type, consumed_capacity, available_capacity
 
 #==============================================================================#
