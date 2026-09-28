@@ -166,9 +166,10 @@ function test_show(
 				x -> repr(mime_type, x; context = limited_io), collection
 				)
 			# Skip the headline.
-			collection_lines = Iterators.drop.(
-				eachline.(IOBuffer.(collection_repr)), one(selected_count)
-				)
+			collection_lines =
+				@. Iterators.drop(
+					eachline(IOBuffer(collection_repr)), one(selected_count)
+					)
 			width_limit_iterator = width - width_offset_iterators
 			width_limit_bit_pack = (width - width_offset_bit_pack) >> 0x1
 
