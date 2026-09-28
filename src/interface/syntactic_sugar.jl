@@ -6,12 +6,12 @@ INDEX
 ===============================================================================#
 
 @inline @generated function Base.getindex(
-	bit_pack::PackedInstances{U, T}, key::Type{X}
+	bit_pack::AbstractPackedInstances{U, T}, key::Type{X}
 	) where {U <: Unsigned, T <: Tuple, X}
 
 	content = fieldtypes(T)
-	search_success = false
 	shift = zero(U)
+	search_success = false
 
 	iteration_handler = iterate(content)
 	while !isnothing(iteration_handler)
@@ -26,36 +26,33 @@ INDEX
 
 	search_success || throw(KeyError(X))
 
-	skip_mask = false
-	#===========================================================================
-	# TODO: Figure out how to enforce this optimisation.
-	# Masking is not required if there are no further bits.
-	skip_mask = isnothing(iteration_handler) || all(
-		x -> iszero(required_bits(x)),
+	# Determine whether there are any further non-zero bits.
+	final_active_bits = isnothing(iteration_handler) || all(
+		ComposedFunction(iszero, required_bits),
 		Iterators.rest(content, last(iteration_handler))
 		)
-	===========================================================================#
 
 	return quote
-		return value_from_bits(X, bit_pack.bits, Val($shift), Val($skip_mask))
+		@inline return value_from_bits(
+			X, bit_pack.bits, Val($shift), Val($final_active_bits)
+			)
 		end
 
 end
 
 @inline @generated function Base.setindex!(
-	bit_pack::PackedInstances{U, T}, value::X, key::Type{X}
+	bit_pack::MutablePackedInstances{U, T}, value::X, key::Type{X}
 	) where {U <: Unsigned, T <: Tuple, X}
 
 	content = fieldtypes(T)
-	search_success = false
 	shift = zero(U)
+	search_success = false
 
 	for variety in content
 		search_success = variety == X
 		search_success && break
 		shift += convert(U, required_bits(variety))
 	end
-
 
 	if !search_success
 		# This avoids repeating the error message.
@@ -68,16 +65,34 @@ end
 			return bit_pack
 			end
 	else
-		mask = ~mask_bit_range(U, required_bits(X), shift)
+		mask = ~mask_bit_range(U, convert(U, required_bits(X)), shift)
+
+		# Permissible given that singletons have been addressed.
+		progression = check_arithmetic_progression(X)
+		if progression.validity
+			# Encourage inlining when encoding is efficient.
+			output = quote
+				@inline bits |= bits_from_value(
+					U, value, Val($shift), Val($progression)
+					)
+				end
+		else
+			output = quote
+				bits |= bits_from_value(
+					U, value, Val($shift), Val($progression)
+					)
+				end
+		end
+
 		output = quote
-			bit_pack.bits &= $mask
-			bit_pack.bits |= bits_from_value(U, value, Val($shift))
+			bits = bit_pack.bits & $mask
+			$output
+			bit_pack.bits = bits
 			return bit_pack
 			end
 	end
 
 	return output
-
 
 end
 
@@ -86,23 +101,23 @@ INDIRECT
 ===============================================================================#
 
 @inline function _indirect_getindex(
-	bit_pack::PackedInstances{U, T}, ::Val{index}
+	bit_pack::AbstractPackedInstances{U, T}, ::Val{index}
 	) where {U <: Unsigned, T <: Tuple, index}
 
 	content = canonical_form(fieldtypes(T))
 	index in eachindex(content) || throw(KeyError(Val(index)))
-	@inbounds output = bit_pack[content[index]]
+	@inbounds @inline output = bit_pack[content[index]]
 	return output
 
 end
 
 @inline function _indirect_setindex!(
-	bit_pack::PackedInstances{U, T}, value, ::Val{index}
+	bit_pack::MutablePackedInstances{U, T}, value, ::Val{index}
 	) where {U <: Unsigned, T <: Tuple, index}
 
 	content = canonical_form(fieldtypes(T))
 	index in eachindex(content) || throw(KeyError(Val(index)))
-	@inbounds bit_pack[content[index]] = value
+	@inbounds @inline bit_pack[content[index]] = value
 	return value
 
 end
@@ -112,11 +127,11 @@ PROPERTY
 ===============================================================================#
 
 @inline function Base.propertynames(
-	bit_pack::PackedInstances{U, T}, private::Bool = false
+	bit_pack::AbstractPackedInstances{U, T}, private::Bool = false
 	) where {U <: Unsigned, T <: Tuple}
 
 	content = Symbol.(canonical_form(fieldtypes(T)))
-	private_content = fieldnames(PackedInstances)
+	private_content = fieldnames(typeof(bit_pack))
 	return ifelse(
 		private,
 		(content..., private_content...),
@@ -128,8 +143,7 @@ end
 @inline function Base.propertynames(
 	input::Union{
 		PackedInstancesKeysIterator,
-		PackedInstancesValuesIterator,
-		PackedInstancesContainer
+		PackedInstancesValuesIterator
 		},
 	private::Bool = false)
 
@@ -143,7 +157,7 @@ end
 end
 
 @generated function Base.getproperty(
-	bit_pack::PackedInstances{U, T}, desired_property::Symbol
+	bit_pack::AbstractPackedInstances{U, T}, desired_property::Symbol
 	) where {U <: Unsigned, T <: Tuple}
 
 	content = canonical_form(fieldtypes(T))
@@ -200,7 +214,7 @@ end
 end
 
 @generated function Base.setproperty!(
-	bit_pack::PackedInstances{U, T}, desired_property::Symbol, value
+	bit_pack::MutablePackedInstances{U, T}, desired_property::Symbol, value
 	) where {U <: Unsigned, T <: Tuple}
 
 	content = canonical_form(fieldtypes(T))

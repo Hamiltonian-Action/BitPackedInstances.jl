@@ -1,12 +1,12 @@
 
 #==============================================================================#
 
-# CAUTION: This is slightly unsafe due to potential hash clashes.
+# CAUTION: This is slightly unsafe due to potential clashes.
 @inline function canonical_form(
 	input::Base.AbstractVecOrTuple
 	)
 
-	return sort(input; by = hash)
+	return sort(input; by = objectid)
 
 end
 
@@ -16,6 +16,21 @@ end
 	) where {X}
 
 	return X
+
+end
+
+# This is marked as `@generated` in order to cache the output.
+# Compiles to an aliance for `instances(X)` when `allunique` holds.
+@inline @generated function unique_instances(
+	X::Type
+	)
+
+	# Eliminate Type{X} wrapper.
+	X = unwrap_type(X)
+	values = tuple(unique(instances(X))...)
+	return quote
+		return $values
+		end
 
 end
 
